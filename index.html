@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DecoyLock - Ransomware Interceptor Prototype</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-orange: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: var(--accent-blue);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--bg-card);
+        }
+
+        .panel-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            gap: 6px;
+        }
+
+        .status-badge.active {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+        }
+
+        .status-badge.alert {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .canary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .canary-file {
+            background: var(--bg-card);
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .canary-file:hover {
+            background: #475569;
+            transform: translateY(-2px);
+        }
+
+        .canary-file.triggered {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid var(--accent-red);
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .file-icon {
+            font-size: 24px;
+        }
+
+        .file-name {
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .process-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .process-item {
+            background: var(--bg-card);
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .process-info {
+            flex: 1;
+        }
+
+        .process-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .process-details {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .process-status {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .process-status.running {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+        }
+
+        .process-status.suspended {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .process-status.malicious {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+        }
+
+        .mobile-view {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .phone-mockup {
+            background: #000;
+            border-radius: 36px;
+            padding: 12px;
+            max-width: 340px;
+            margin: 20px auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .phone-screen {
+            background: var(--bg-primary);
+            border-radius: 24px;
+            padding: 20px;
+            min-height: 500px;
+            position: relative;
+        }
+
+        .alert-card {
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid var(--accent-red);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .alert-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .alert-icon {
+            font-size: 36px;
+            animation: pulse 2s infinite;
+        }
+
+        .alert-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent-red);
+        }
+
+        .alert-details {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .detail-label {
+            color: var(--text-secondary);
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-kill {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .btn-kill:hover {
+            background: #dc2626;
+            transform: scale(1.02);
+        }
+
+        .btn-safe {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .btn-safe:hover {
+            background: #475569;
+        }
+
+        .demo-controls {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .demo-btn {
+            background: var(--accent-blue);
+            color: white;
+            padding: 16px 32px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 0 8px;
+        }
+
+        .demo-btn:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+
+        .demo-btn.reset {
+            background: var(--bg-card);
+        }
+
+        .demo-btn.reset:hover {
+            background: #475569;
+        }
+
+        .timeline {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--bg-secondary);
+        }
+
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+
+        .timeline-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+            min-width: 80px;
+        }
+
+        .timeline-event {
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--accent-blue);
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--accent-blue);
+        }
+
+        .info-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        @media (max-width: 1024px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ DecoyLock - Ransomware Interceptor</h1>
+            <p class="subtitle">Deception-Based Real-Time Threat Detection & Response System</p>
+        </header>
+
+        <div class="layout">
+            <!-- Left Panel: Desktop Dashboard -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">🖥️ Desktop Dashboard</span>
+                    <span class="status-badge active" id="systemStatus">
+                        <span class="status-indicator"></span>
+                        System Active
+                    </span>
+                </div>
+
+                <div>
+                    <h3 style="margin-bottom: 12px; font-size: 16px;">Canary Files Deployed</h3>
+                    <div class="canary-grid" id="canaryGrid">
+                        <div class="canary-file" data-file="passwords.txt">
+                            <span class="file-icon">📄</span>
+                            <span class="file-name">passwords.txt</span>
+                        </div>
+                        <div class="canary-file" data-file="budget.xlsx">
+                            <span class="file-icon">📊</span>
+                            <span class="file-name">budget.xlsx</span>
+                        </div>
+                        <div class="canary-file" data-file="crypto_keys.dat">
+                            <span class="file-icon">🔑</span>
+                            <span class="file-name">crypto_keys.dat</span>
+                        </div>
+                        <div class="canary-file" data-file="salary_2024.docx">
+                            <span class="file-icon">📝</span>
+                            <span class="file-name">salary_2024.docx</span>
+                        </div>
+                        <div class="canary-file" data-file="bank_info.pdf">
+                            <span class="file-icon">💳</span>
+                            <span class="file-name">bank_info.pdf</span>
+                        </div>
+                        <div class="canary-file" data-file="project_backup.zip">
+                            <span class="file-icon">📦</span>
+                            <span class="file-name">project_backup.zip</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3 style="margin-bottom: 12px; font-size: 16px;">Active Processes</h3>
+                    <div class="process-list" id="processList">
+                        <div class="process-item">
+                            <div class="process-info">
+                                <div class="process-name">chrome.exe</div>
+                                <div class="process-details">PID: 2341 | Memory: 245 MB</div>
+                            </div>
+                            <span class="process-status running">Running</span>
+                        </div>
+                        <div class="process-item">
+                            <div class="process-info">
+                                <div class="process-name">explorer.exe</div>
+                                <div class="process-details">PID: 1024 | Memory: 98 MB</div>
+                            </div>
+                            <span class="process-status running">Running</span>
+                        </div>
+                        <div class="process-item">
+                            <div class="process-info">
+                                <div class="process-name">vscode.exe</div>
+                                <div class="process-details">PID: 4521 | Memory: 512 MB</div>
+                            </div>
+                            <span class="process-status running">Running</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="canaryCount">6</div>
+                        <div class="stat-label">Canaries Active</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="threatCount">0</div>
+                        <div class="stat-label">Threats Blocked</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="responseTime">0ms</div>
+                        <div class="stat-label">Avg Response</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Mobile App -->
+            <div class="mobile-view">
+                <div class="panel-header">
+                    <span class="panel-title">📱 Android Mobile App</span>
+                </div>
+
+                <div class="phone-mockup">
+                    <div class="phone-screen" id="phoneScreen">
+                        <div style="text-align: center; padding: 60px 20px;">
+                            <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                            <h2 style="color: var(--accent-green); margin-bottom: 12px;">System Protected</h2>
+                            <p style="color: var(--text-secondary); font-size: 14px;">No threats detected</p>
+                            <p style="color: var(--text-secondary); font-size: 13px; margin-top: 20px;">
+                                DecoyLock is monitoring your system<br>in real-time
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <div class="info-title">🔔 Alert Mechanism</div>
+                    <div class="info-text">
+                        When a threat is detected, you'll receive an instant Firebase push notification with process details and remote control options.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">📊 Activity Timeline</span>
+            </div>
+            <div class="timeline" id="timeline">
+                <div class="timeline-item">
+                    <span class="timeline-time">00:00:00</span>
+                    <span class="timeline-event">System initialized successfully</span>
+                </div>
+                <div class="timeline-item">
+                    <span class="timeline-time">00:00:01</span>
+                    <span class="timeline-event">6 canary files deployed</span>
+                </div>
+                <div class="timeline-item">
+                    <span class="timeline-time">00:00:02</span>
+                    <span class="timeline-event">Sentinel Daemon active - Monitoring file system</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Controls -->
+        <div class="demo-controls">
+            <h3 style="margin-bottom: 20px;">🎯 Prototype Demo Controls</h3>
+            <p style="margin-bottom: 20px; color: var(--text-secondary);">
+                Simulate a ransomware attack to see DecoyLock in action
+            </p>
+            <button class="demo-btn" onclick="simulateAttack()">▶️ Simulate Ransomware Attack</button>
+            <button class="demo-btn reset" onclick="resetDemo()">🔄 Reset Demo</button>
+        </div>
+    </div>
+
+    <script>
+        let startTime = Date.now();
+        let threatCounter = 0;
+        let timelineCounter = 3;
+
+        function getElapsedTime() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const seconds = String(elapsed % 60).padStart(2, '0');
+            return `00:${minutes}:${seconds}`;
+        }
+
+        function addTimelineEvent(event, isAlert = false) {
+            const timeline = document.getElementById('timeline');
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+                <span class="timeline-time">${getElapsedTime()}</span>
+                <span class="timeline-event" style="${isAlert ? 'color: var(--accent-red); font-weight: 600;' : ''}">${event}</span>
+            `;
+            timeline.appendChild(item);
+            timeline.scrollTop = timeline.scrollHeight;
+        }
+
+        function simulateAttack() {
+            // Step 1: Show system detecting file access
+            addTimelineEvent('⚠️ Unauthorized file access detected!', true);
+            
+            const targetFile = document.querySelector('[data-file="passwords.txt"]');
+            targetFile.classList.add('triggered');
+            
+            const systemStatus = document.getElementById('systemStatus');
+            systemStatus.className = 'status-badge alert';
+            systemStatus.innerHTML = '<span class="status-indicator"></span>THREAT DETECTED';
+
+            setTimeout(() => {
+                // Step 2: Identify malicious process
+                addTimelineEvent('🔍 Identifying malicious process...', true);
+                
+                setTimeout(() => {
+                    // Step 3: Add malicious process to list
+                    const processList = document.getElementById('processList');
+                    const maliciousProcess = document.createElement('div');
+                    maliciousProcess.className = 'process-item';
+                    maliciousProcess.id = 'maliciousProcess';
+                    maliciousProcess.innerHTML = `
+                        <div class="process-info">
+                            <div class="process-name">⚠️ crypto_locker.exe</div>
+                            <div class="process-details">PID: 8765 | Target: passwords.txt</div>
+                        </div>
+                        <span class="process-status malicious">Malicious</span>
+                    `;
+                    processList.insertBefore(maliciousProcess, processList.firstChild);
+                    
+                    addTimelineEvent('🎯 Malicious process identified: crypto_locker.exe (PID: 8765)', true);
+                    
+                    setTimeout(() => {
+                        // Step 4: Suspend process
+                        addTimelineEvent('⏸️ Process suspended via NtSuspendProcess API', true);
+                        document.querySelector('#maliciousProcess .process-status').className = 'process-status suspended';
+                        document.querySelector('#maliciousProcess .process-status').textContent = 'Suspended';
+                        
+                        setTimeout(() => {
+                            // Step 5: Send mobile alert
+                            addTimelineEvent('📱 Firebase alert sent to mobile device', true);
+                            showMobileAlert();
+                            
+                            threatCounter++;
+                            document.getElementById('threatCount').textContent = threatCounter;
+                            document.getElementById('responseTime').textContent = '2.3ms';
+                        }, 800);
+                    }, 1000);
+                }, 1000);
+            }, 1000);
+        }
+
+        function showMobileAlert() {
+            const phoneScreen = document.getElementById('phoneScreen');
+            phoneScreen.innerHTML = `
+                <div class="alert-card">
+                    <div class="alert-header">
+                        <span class="alert-icon">🚨</span>
+                        <span class="alert-title">CRITICAL ALERT</span>
+                    </div>
+                    
+                    <div class="alert-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Threat Type:</span>
+                            <span class="detail-value">Ransomware</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Process:</span>
+                            <span class="detail-value">crypto_locker.exe</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">PID:</span>
+                            <span class="detail-value">8765</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Target File:</span>
+                            <span class="detail-value">passwords.txt</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Status:</span>
+                            <span class="detail-value" style="color: var(--accent-orange);">⏸️ SUSPENDED</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Detected:</span>
+                            <span class="detail-value">${getElapsedTime()}</span>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-kill" onclick="killProcess()">
+                        🛑 TERMINATE PROCESS
+                    </button>
+                    <button class="btn btn-safe" onclick="markSafe()">
+                        ✅ Mark as Safe
+                    </button>
+                </div>
+
+                <div style="margin-top: 20px; padding: 16px; background: var(--bg-card); border-radius: 8px;">
+                    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                        <strong style="color: var(--text-primary);">Action Required:</strong> A process attempted to access a protected canary file. Review the details above and choose an action.
+                    </p>
+                </div>
+            `;
+        }
+
+        function killProcess() {
+            addTimelineEvent('💀 User initiated process termination from mobile', true);
+            
+            setTimeout(() => {
+                addTimelineEvent('✅ Process crypto_locker.exe (PID: 8765) terminated successfully', false);
+                
+                const maliciousProcess = document.getElementById('maliciousProcess');
+                if (maliciousProcess) {
+                    maliciousProcess.remove();
+                }
+
+                const phoneScreen = document.getElementById('phoneScreen');
+                phoneScreen.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                        <h2 style="color: var(--accent-green); margin-bottom: 12px;">Threat Eliminated</h2>
+                        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">
+                            Process terminated successfully
+                        </p>
+                        <p style="color: var(--text-secondary); font-size: 13px;">
+                            crypto_locker.exe has been removed<br>
+                            System is now secure
+                        </p>
+                        <div style="margin-top: 30px; padding: 16px; background: var(--bg-card); border-radius: 8px;">
+                            <div style="font-size: 12px; color: var(--text-secondary);">
+                                <strong style="color: var(--accent-green);">✓</strong> Files protected<br>
+                                <strong style="color: var(--accent-green);">✓</strong> No data loss<br>
+                                <strong style="color: var(--accent-green);">✓</strong> Threat neutralized in 2.3ms
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const systemStatus = document.getElementById('systemStatus');
+                systemStatus.className = 'status-badge active';
+                systemStatus.innerHTML = '<span class="status-indicator"></span>System Active';
+
+                const targetFile = document.querySelector('[data-file="passwords.txt"]');
+                if (targetFile) {
+                    targetFile.classList.remove('triggered');
+                }
+            }, 1000);
+        }
+
+        function markSafe() {
+            addTimelineEvent('⚠️ Process marked as safe - Resuming execution', false);
+            
+            const maliciousProcess = document.getElementById('maliciousProcess');
+            if (maliciousProcess) {
+                maliciousProcess.querySelector('.process-status').className = 'process-status running';
+                maliciousProcess.querySelector('.process-status').textContent = 'Running';
+                maliciousProcess.querySelector('.process-name').textContent = 'crypto_locker.exe';
+            }
+
+            const phoneScreen = document.getElementById('phoneScreen');
+            phoneScreen.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px;">
+                    <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                    <h2 style="color: var(--accent-green); margin-bottom: 12px;">Process Resumed</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px;">
+                        The process has been marked as safe<br>and resumed execution
+                    </p>
+                </div>
+            `;
+
+            const systemStatus = document.getElementById('systemStatus');
+            systemStatus.className = 'status-badge active';
+            systemStatus.innerHTML = '<span class="status-indicator"></span>System Active';
+
+            const targetFile = document.querySelector('[data-file="passwords.txt"]');
+            if (targetFile) {
+                targetFile.classList.remove('triggered');
+            }
+        }
+
+        function resetDemo() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
